@@ -1,0 +1,219 @@
+
+#!/bin/bash
+# title              : pushCode
+# description  : Remote copy source Skill (back-office) to AWS Lambda
+# author:        : P.COPINE
+# date            : 06/11/202
+# version       : 1.0   
+# usage         : pushCode [-h] -k keySSH -l id-lambda [-m] [-p profile] [-r region] -s path -t tag [-u user-ec2] [-v]
+
+OPTIONS="hk:l:mp:r:s:t:u:v:"
+
+function help () {
+  echo "usage: $(basename $0) [-h] -k keySSH -l id-lambda [-m] [-p profile] [-r region] -s path -t tag [-u user-ec2] [-v]"
+  echo "  [-h]: simple aide en ligne"
+  echo "  -k key: chemin absolu ou relatif au fichier PEM relatif à la clé privée SSH"
+  echo "  -l id-lambda: identification (id) de la fonction serverless associée à la skill"
+  echo "  [-m]: prise en compte des modules Nodejs dans le transfert"
+  echo "  [-p profile]: nom du profile AWS retenu"
+  echo "  [-r region]: nom de la région AWS retenue"
+  echo "  -s source: répertoire local racine de la skill"
+  echo "  -t tag: tag of instance"
+  echo "  [-u user]: nom utilisateur de l'instance EC2"
+  echo "  [-v]: verbose"
+
+  exit ${EXIT:-0}
+}
+
+function publishFiles () {
+  tagKey=$(echo $tag | awk -F':' '{ print $1; }')
+  tagValue=$(echo $tag | awk -F':' '{ print $2; }')
+
+  echo "Search IP Address of EC2 instance..."
+
+  ipAddressGateway=$(aws --profile $profile --region $region ec2 \
+    describe-instances --filters "Name=tag:$tagKey,Values=$tagValue" | \
+    jq '.Reservations[0].Instances[0].PublicIpAddress' | sed -e 's/^.\(.*\).$/\1/')
+
+  echo "IP Address of EC2 instance = $ipAddressGateway"
+
+  # 1 Packaging au format ZIP des fichiers de la skill complete avec ou sans le répertoire node_modules
+  echo "Check access & local directory with account of remote EC2 instance..."
+  ssh -o StrictHostKeyChecking=no -i $keySSH $user@$ipAddressGateway '[ ! -d tmp ] && mkdir tmp'
+
+  [ ${mFlag:-0} -eq 1 ] && {
+    (
+      cd $sourceFiles; rm -f /tmp/skill.zip
+      echo "Local zip packaging of all files of skill..."
+
+      [ ${verbose:-"no trace"} == "trace" ] && {
+        find . -type d \( -path ./.git -o -path ./simulator \) -prune  -o \
+          -type f \( -path ./LICENSE -o -path ./NOTICE \) -prune \
+          -o -exec zip /tmp/skill.zip {} +
+      } || {
+        find . -type d \( -path ./.git -o -path ./simulator \) -prune  -o \
+          -type f \( -path ./LICENSE -o -path ./NOTICE \) -prune \
+          -o -exec zip -qq /tmp/skill.zip {} +
+      }
+      echo "Copy local Zip file with \"lambda/node_modules\" directory to remote EC2..."
+      scp -i $keySSH /tmp/skill.zip $user@$ipAddressGateway:tmp
+    )
+  } || {
+    (
+      cd $sourceFiles; rm -f /tmp/code.zip
+      echo "Local zip packaging of all files without \"lambda/node_modules\"..."
+      
+      [ ${verbose:-"no trace"} == "trace" ] && {
+        find . -type d \( -path ./lambda/node_modules -o -path ./.git -o -path ./simulator \) -prune  -o \
+          -type f \( -path ./LICENSE -o -path ./NOTICE \) -prune \
+          -o -exec zip /tmp/code.zip {} +
+      } || {
+        find . -type d \( -path ./lambda/node_modules -o -path ./.git -o -path ./simulator \) -prune  -o \
+          -type f \( -path ./LICENSE -o -path ./NOTICE \) -prune \
+          -o -exec zip -qq /tmp/code.zip {} +        
+      }
+
+      echo "Copy local Zip file without lambda/node_modules directory to remote EC2..."
+      scp -i $keySSH /tmp/code.zip $user@$ipAddressGateway:tmp
+    )
+  }
+
+  # 2 Traitement distant de mise en forme des packages ZIP et publication sur AWS Lambda
+  labelLambdaFunction="serverlessrepo-alexa-skil-alexaskillskitnodejsfact"
+
+  [ ${mFlag:-0} -eq 1 ] && {
+    echo "Start pushing Zip file packaging to AWS Lambda service..."
+
+    result=$(ssh -o StrictHostKeyChecking=no -i $keySSH  $user@$ipAddressGateway "aws lambda update-function-code \
+      --function-name ${labelLambdaFunction}-${idLambdaFunction} \
+      --zip-file fileb://tmp/skill.zip --publish")
+    
+    [ ${verbose:-"no trace"} == "trace" ] && { echo $result | jq '.'; }
+    echo "Extract and zip \"lambda/node_modules\" directory..."
+
+    [ ${verbose:-"no trace"} == "trace" ] && {
+      ssh -o StrictHostKeyChecking=no -i $keySSH $user@$ipAddressGateway bash -c 'set -x; pwd; \
+        cd tmp; \
+        rm -rf lambda node_modules.zip; \
+        unzip ~/tmp/skill.zip "lambda/*" -d . ; \
+        rm -f lambda/index.js; \
+        zip -r node_modules.zip lambda; \
+        rm -rf lambda'
+    } || {
+      ssh -o StrictHostKeyChecking=no -i $keySSH $user@$ipAddressGateway bash ' \
+        cd tmp; \
+        rm -rf lambda node_modules.zip; \
+        unzip -qq ~/tmp/skill.zip "lambda/*" -d . ; \
+        rm -f lambda/index.js; \
+        zip -qq -r node_modules.zip lambda; \
+        rm -rf lambda'  
+    }
+  } || {
+    echo "Merge all files to ZIP file..."
+    
+    [ ${verbose:-"no trace"} == "trace" ] && {
+      ssh -o StrictHostKeyChecking=no -i $keySSH $user@$ipAddressGateway bash -c 'set -x; \
+        rm -rf tmp/newSkill; \
+        mkdir -p tmp/newSkill; \
+        unzip -d tmp/newSkill tmp/code.zip; \
+        rm -f tmp/skill.zip; \
+        cp tmp/node_modules.zip tmp/skill.zip; \
+        (cd tmp/newSkill; zip -ur ../skill.zip .)'
+    } || {
+      ssh -o StrictHostKeyChecking=no -i $keySSH $user@$ipAddressGateway bash ' \
+        rm -rf tmp/newSkill; \
+        mkdir -p tmp/newSkill; \
+        unzip -qq -d tmp/newSkill tmp/code.zip; \
+        rm -f tmp/skill.zip; \
+        mv tmp/node_modules.zip tmp/skill.zip; \
+        (cd tmp/newSkill; zip -qq -ur ../skill.zip .)'
+    }
+    echo "Pushing Zip file packaging to AWS Lambda service..."
+    
+    result=$(ssh -o StrictHostKeyChecking=no -i $keySSH $user@$ipAddressGateway "aws lambda update-function-code \
+      --function-name ${labelLambdaFunction}-${idLambdaFunction} \
+      --zip-file fileb://tmp/skill.zip --publish")
+    
+    [ ${verbose:-"no trace"} == "trace" ] && { echo $result | jq '.'; }
+  }
+}
+ 
+function usage () {
+  echo "usage: $(basename $0) -d path [-h] [-k keySSH] [-m] [-p profile] [-r region] -s path -t tag [-u user-ec2] [-v]"
+
+  exit ${EXIT:-1}
+}
+
+while getopts $OPTIONS option; do
+  case "${option}" in
+    h)
+      help
+      ;;
+    k)
+      kFlag=1
+      [ -f ${OPTARG} ] && keySSH=${OPTARG} || {
+        echo "File \"${OPTARG}\" SSH private key not found"
+        exit ${EXIT_BAD:-1}
+      }
+      ;;
+    l)
+      lFlag=1
+      idLambdaFunction=${OPTARG}
+      ;;
+    m)
+      mFlag=1
+      ;;
+    p)
+      pFlag=1
+      profile=${OPTARG}
+      ;;
+    r)
+      rFlag=1
+      region=${OPTARG}
+      ;;
+    s)
+      sFlag=1
+      if [ ! -d ${OPTARG} ]; then
+        echo "Local directory \"${OPTARG}\" of skill not found"
+        exit ${EXIT_BAD:-1}
+      else
+        sourceFiles=${OPTARG}
+      fi
+      ;;
+    t)
+      tFlag=1
+      tag=${OPTARG}
+      ;;
+    u)
+      uFlag=1
+      user=${OPTARG}
+      ;;
+    v)
+      verbose=${OPTARG}
+      ;;
+    *)
+      usage
+      ;;
+  esac
+done
+
+shift $((OPTIND-1))
+
+if [ ${pFlag:-0} -eq 0 ] && [ -z $AWS_PROFILE ]; then
+  profile=$AWS_PROFILE
+  pFlag=1
+fi
+
+if [ ${rFlag:-0} -eq 0 ] && [ -z $AWS_DEFAULT_REGION ]; then
+  region=$AWS_DEFAULT_REGION
+  rFlag=1
+fi
+
+if [ ${lFlag:-0} -eq 1 -a ${pFlag:-0} -eq 1 -a ${rFlag:-0} -eq 1 -a  ${tFlag:-0} -eq 1 -a ${sFlag:-0} -eq 1 ]; then
+  publishFiles
+else 
+  usage
+fi
+
+echo "End of task"
+

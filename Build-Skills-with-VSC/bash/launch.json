@@ -1,0 +1,53 @@
+{
+ "version": "0.2.0",
+ "configurations": [
+   {
+     "type": "bashdb",
+     "request": "launch",
+     "name": "driveGateway (debug)",
+     "cwd": "${workspaceFolder}",
+     "program": "< Full path of driveGateway >",
+     "args": [
+       "-c", "status",
+       "-p", "< Your AWS Profile >",
+       "-r", "< Your AWS Region >",
+       "-t", "InstanceName:GatewayPush"
+     ]
+   },
+   {
+     "type": "bashdb",
+     "request": "launch",
+     "name": "pushCode (debug: skill files with node_modules)",
+     "cwd": "${workspaceFolder}",
+     "program": "< Full patch of pushCode >",
+     "args": [
+       "-k", "~.ssh/GatewayPush.pem",
+       "-l", "< Your AWS Lambda ID >",
+       "-m",
+       "-p", "< Your AWS Profile >",
+       "-r", "< Your AWS Region >",
+       "-s", "< Full path of your skill directory >",
+       "-t", "InstanceName:GatewayPush",
+       "-u", "ec2-user",
+       "-v", "no trace"
+     ]
+   },
+   {
+     "type": "bashdb",
+     "request": "launch",
+     "name": "pushCode (debug: skill files without node_modules)",
+     "cwd": "${workspaceFolder}",
+     "program": "< Full patch of pushCode >",
+     "args": [
+       "-k", "~.ssh/GatewayPush.pem",
+       "-l", "< Your AWS Lambda ID >",
+       "-p", "< Your AWS Profile >",
+       "-r", "< Your AWS Region >",
+       "-s", "< Full path of your skill directory >",
+       "-t", "InstanceName:GatewayPush",
+       "-u", "ec2-user",
+       "-v", "no trace"
+     ]
+   }
+ ]
+}

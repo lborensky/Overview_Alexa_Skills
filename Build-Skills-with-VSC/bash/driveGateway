@@ -1,0 +1,139 @@
+#!/bin/bash
+# title              : driveGateway
+# description  : Gestion instance EC2 nommée Gateway (start, stop & statis)
+# author         : P.COPINE
+# date            : 06/11/202
+# version       : 1.0   
+# usage         : driveGate -c start | status | stop [-h] [-p profile] [-r region] -t tag [-v]
+
+OPTIONS="c:hp:r:t:v:"
+
+function validCommand () {
+  case $1 in 
+    start | status | stop )
+      echo ${GOOD:-1}
+      ;;
+    *)
+      echo ${BAD:-0}
+      ;;
+  esac
+}
+
+function help () {
+  echo "usage: $(basename $0) -c start | status | stop [-h] [-p profile] [-r region] -t tag [-v no trace | trace]"
+  echo "  -c start | stop | status: lance une commande relative à une instance AWS EC2"
+  echo "  -h: simple aide en ligne"
+  echo "  -p profile: nom du profile AWS retenu"
+  echo "  -r region: nom de la région AWS retenue"
+  echo "  -t tag: tag of instance"
+  echo "  -v no trace | trace: mode verbose"
+
+  exit ${EXIT:-0}
+}
+
+function sendCommand () {
+  key=$(echo $tag | awk -F':' '{ print $1; }')
+  value=$(echo $tag | awk -F':' '{ print $2; }')
+
+  INSTANCE_ID=$(aws --profile $profile --region $region \
+    ec2 describe-instances --filters "Name=tag:$key,Values=$value" | \
+    jq '.Reservations[0].Instances[0].InstanceId' | sed -e 's/^.\(.*\).$/\1/')
+
+  case $command in
+    start)
+      echo "Launch Gateway Instance"
+
+      result=$(aws --profile $profile --region $region \
+        ec2 start-instances --instance-ids $INSTANCE_ID)
+
+      echo "CurrenState: pending"
+
+      if [ ${verbose:-"no trace"} == "trace"]; then
+        echo $result | jq '.'
+      fi
+      ;;
+    status)
+      echo "Search Gateway Instance Status"
+
+      result=$(aws --profile $profile --region $region \
+        ec2 describe-instances  --filters "Name=tag:$key,Values=$value")
+
+      echo "Status = $(echo $result | \
+        jq '.Reservations[0].Instances[0].State.Name' | sed -e 's/^.\(.*\).$/\1/')"
+
+      if [ ${verbose:-"no trace"} == "trace" ]; then
+        echo $result | jq '.'
+      fi
+      ;;
+    stop) 
+      echo "Stop Gateway Instance"
+
+      result=$(aws --profile $profile --region $region \
+        ec2 stop-instances --instance-ids $INSTANCE_ID) 
+
+      echo "CurrenState: stopping"
+
+      if [ ${verbose:-"no trace"} == "trace" ]; then
+        echo $result | jq '.'
+      fi
+      ;;
+    *)
+      usage
+      ;;
+  esac
+}
+
+function usage () {
+  echo "usage: $(basename $0) -c start | stop | status [-h] [-p profile] [-r region] -t tag [-v no trace | trace]"
+
+  exit ${EXIT:-1}
+}
+
+while getopts $OPTIONS option; do
+  case "${option}" in
+    c)
+      cFlag=1
+      [ "$(validCommand ${OPTARG})" == "1" ] && command=${OPTARG} || usage
+      ;;
+    h)
+      help
+      ;;
+    p)
+      pFlag=1
+      profile=${OPTARG}
+      ;;
+    r)
+      rFlag=1
+      region=${OPTARG}
+      ;;
+    t)
+      tFlag=1
+      tag=${OPTARG}
+      ;;
+    v)
+      verbose=${OPTARG}
+      ;;
+    *)
+      usage
+      ;;
+  esac
+done
+
+shift $((OPTIND-1))
+
+if [ ${pFlag:-0} -eq 0 ] && [ -z $AWS_PROFILE ]; then
+  profile=$AWS_PROFILE
+  pFlag=1
+fi
+
+if [ ${rFlag:-0} -eq 0 ] && [ -z $AWS_DEFAULT_REGION ]; then
+  region=$AWS_DEFAULT_REGION
+  rFlag=1
+fi
+
+if [ ${cFlag:-0} -eq 1 -a ${pFlag:-0} -eq 1 -a ${rFlag:-0} -eq 1 -a  ${tFlag:-0} -eq 1 ]; then
+  sendCommand $command
+else 
+  usage
+fi
+
