@@ -12,9 +12,9 @@ La publication de livres durant le premier trimestre 2021 devrait être la suiva
  3. Overview Alexa Skill APLA
  4. Overview Alexa Skill Testing
 
-Les autres publications pour le seconde trimestre 2021 devraient être les suivantes : 
+Les autres publications pour le second trimestre 2021 devraient être les suivantes : 
 
  1. Overview Alexa Skill Conversations
  2. Overview Alexa Skill Controls Framework
 
-Les autres livres seront publiées au cours du second semestre 2021.
+Les autres livres seront aussi  publiées au cours du second semestre 2021 en fonction de l'audience de la première publication uniquement sous Amazon KDP. 
