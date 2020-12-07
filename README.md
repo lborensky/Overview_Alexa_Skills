@@ -7,14 +7,15 @@ Le premier ouvrage de la série ci-dessous concerne la prise en main de l'IDE Vi
 
 La publication de livres durant le premier trimestre 2021 devrait être la suivante: 
 
- 1. Overview Alexa Skill Concept & Architecture
- 2. Overview Alexa Skill APL
- 3. Overview Alexa Skill APLA
- 4. Overview Alexa Skill Testing
+ 1. Overview Alexa Skill **Concept & Architecture**
+ 2. Overview Alexa Skill **APL**
+ 3. Overview Alexa Skill **APLA**
+ 4. Overview Alexa Skill **Testing**
 
 Les autres publications pour le second trimestre 2021 devraient être les suivantes : 
 
- 1. Overview Alexa Skill Conversations
- 2. Overview Alexa Skill Controls Framework
-
-Les autres livres seront aussi  publiées au cours du second semestre 2021 en fonction de l'audience de la première publication uniquement sous Amazon KDP. 
+ 1. Overview Alexa Skill **Conversations**
+ 2. Overview Alexa Skill **Controls Framework**
+ 3. Overview Alexa Skill **JSX**
+ 
+Les autres livres seront aussi  publiées au cours du second semestre 2021 en fonction de l'audience de la première publication uniquement sous **Amazon KDP**.
